@@ -4,7 +4,6 @@ from firebase_admin import credentials
 from firebase_admin import firestore
 from datetime import datetime
 
-# Initialize Firebase
 project_id = os.environ.get('FIREBASE_PROJECT_ID')
 client_email = os.environ.get('FIREBASE_CLIENT_EMAIL')
 private_key = os.environ.get('FIREBASE_PRIVATE_KEY')
@@ -92,4 +91,3 @@ if db:
         print(f"Error saving to Firestore: {e}")
 else:
     print(f"Firestore DB not connected. Local simulation output: {scanned_stocks}")
-  
