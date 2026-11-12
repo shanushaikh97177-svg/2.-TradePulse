@@ -14,6 +14,7 @@
         .price { font-size: 18px; font-weight: bold; }
         .details { margin-top: 10px; font-size: 14px; color: #94a3b8; }
         .badge { background: #0284c7; padding: 4px 8px; border-radius: 4px; font-size: 12px; color: white; }
+        .loading { text-align: center; color: #94a3b8; margin-top: 40px; font-size: 18px; }
     </style>
 </head>
 <body>
@@ -21,44 +22,57 @@
         <h1>TradePulse Stock Scanner</h1>
         <p style="text-align: center; color: #94a3b8;">Smart Money Accumulation & Breakout Engine</p>
         
-        <div class="card">
-            <div class="stock-header">
-                <div>
-                    <span class="symbol">RELIANCE</span> <span class="badge">Nifty 100</span>
-                </div>
-                <div class="price">₹2,845.50 <span style="color: #34d399; font-size: 14px;">(+2.4%)</span></div>
-            </div>
-            <div class="details">
-                <p><strong>Consolidation:</strong> 38 Days (6.8% Range) | <strong>Volume:</strong> 2.8x Average</p>
-                <p><strong>Why Selected:</strong> Strict 38-day base breakout with institutional volume absorption above 200 EMA.</p>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="stock-header">
-                <div>
-                    <span class="symbol">TCS</span> <span class="badge">Nifty 50</span>
-                </div>
-                <div class="price">₹4,120.00 <span style="color: #34d399; font-size: 14px;">(+1.8%)</span></div>
-            </div>
-            <div class="details">
-                <p><strong>Consolidation:</strong> 45 Days (5.2% Range) | <strong>Volume:</strong> 2.1x Average</p>
-                <p><strong>Why Selected:</strong> IT sector accumulation with strong delivery pickup at support level.</p>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="stock-header">
-                <div>
-                    <span class="symbol">TATAMOTORS</span> <span class="badge">Nifty 100</span>
-                </div>
-                <div class="price">₹985.25 <span style="color: #34d399; font-size: 14px;">(+4.8%)</span></div>
-            </div>
-            <div class="details">
-                <p><strong>Consolidation:</strong> 32 Days (4.1% Range) | <strong>Volume:</strong> 3.4x Average</p>
-                <p><strong>Why Selected:</strong> Massive volume breakout from flat base with strong institutional buying.</p>
-            </div>
+        <div id="stock-container">
+            <div class="loading">Loading live scanned stocks from Firebase...</div>
         </div>
     </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            projectId: "karigarhub-4be11",
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        async function loadStocks() {
+            const container = document.getElementById('stock-container');
+            try {
+                const querySnapshot = await getDocs(collection(db, "daily_picks"));
+                if (querySnapshot.empty) {
+                    container.innerHTML = '<div class="loading">No stocks found in database yet. Run the scanner!</div>';
+                    return;
+                }
+
+                let html = '';
+                querySnapshot.forEach((doc) => {
+                    const stock = doc.data();
+                    html += `
+                        <div class="card">
+                            <div class="stock-header">
+                                <div>
+                                    <span class="symbol">${stock.symbol}</span> <span class="badge">${stock.category}</span>
+                                </div>
+                                <div class="price">${stock.price} <span style="color: #34d399; font-size: 14px;">(${stock.change})</span></div>
+                            </div>
+                            <div class="details">
+                                <p><strong>Consolidation:</strong> ${stock.consolidation_range} | <strong>Volume:</strong> ${stock.volume_spike}</p>
+                                <p><strong>Why Selected:</strong> ${stock.why_selected}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            } catch (error) {
+                console.error("Error fetching stocks:", error);
+                container.innerHTML = '<div class="loading" style="color: #f87171;">Error loading data from Firebase.</div>';
+            }
+        }
+
+        loadStocks();
+    </script>
 </body>
 </html>

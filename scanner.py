@@ -3,7 +3,6 @@ from firebase_admin import credentials
 from firebase_admin import firestore
 from datetime import datetime
 
-# Direct credentials hardcoded to avoid GitHub Secrets issues
 cred_dict = {
     "type": "service_account",
     "project_id": "karigarhub-4be11",
