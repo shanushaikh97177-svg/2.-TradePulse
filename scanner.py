@@ -20,7 +20,7 @@ nifty_500_symbols = [
 def run_institutional_scanner():
     scanned_stocks = []
     today_date = datetime.now().strftime('%Y-%m-%d')
-    print("🚀 Scanning for Buy-Side Pre-Breakouts & Sell-Side Breakdowns...")
+    print("🚀 Scanning for Strong Recovery Pre-Breakouts & Breakdowns...")
 
     for symbol in nifty_500_symbols:
         try:
@@ -52,39 +52,45 @@ def run_institutional_scanner():
             dma_100 = float(df['DMA100'].iloc[-1])
             dma_200 = float(df['DMA200'].iloc[-1])
 
-            # Distance percentage check
+            # Distance percentage check from DMA
             dist_50 = ((current_price - dma_50) / dma_50) * 100
             dist_100 = ((current_price - dma_100) / dma_100) * 100
             dist_200 = ((current_price - dma_200) / dma_200) * 100
+
+            # ---------------------------------------------------------
+            # BOUNCE LOGIC: Pichle 15 din ke low se kitna upar aaya hai
+            # ---------------------------------------------------------
+            low_15d = float(df['Close'].tail(15).min())
+            bounce_from_low = round(((current_price - low_15d) / low_15d) * 100, 2)
 
             category = None
             reason = None
 
             # ---------------------------------------------------------
-            # BUY SIDE (Approaching Breakout from below)
+            # 1. BUY SIDE (Approaching DMA + Minimum 4% bounce from recent low)
             # ---------------------------------------------------------
-            if -2.0 <= dist_200 <= 1.0 and current_price >= dma_200:
+            if -2.0 <= dist_200 <= 0.0 and bounce_from_low >= 4.0:
                 category = "Approaching 200 DMA (Buy)"
-                reason = f"Pre-Breakout Radar: Only {abs(round(dist_200, 2))}% away from 200 DMA"
-            elif -2.0 <= dist_100 <= 1.0 and current_price >= dma_100:
+                reason = f"Strong Recovery: +{bounce_from_low}% bounce from low, {abs(round(dist_200, 2))}% below 200 DMA"
+            elif -2.0 <= dist_100 <= 0.0 and bounce_from_low >= 4.0:
                 category = "Approaching 100 DMA (Buy)"
-                reason = f"Pre-Breakout Radar: Only {abs(round(dist_100, 2))}% away from 100 DMA"
-            elif -2.0 <= dist_50 <= 1.0 and current_price >= dma_50:
+                reason = f"Strong Recovery: +{bounce_from_low}% bounce from low, {abs(round(dist_100, 2))}% below 100 DMA"
+            elif -2.0 <= dist_50 <= 0.0 and bounce_from_low >= 4.0:
                 category = "Approaching 50 DMA (Buy)"
-                reason = f"Pre-Breakout Radar: Only {abs(round(dist_50, 2))}% away from 50 DMA"
+                reason = f"Strong Recovery: +{bounce_from_low}% bounce from low, {abs(round(dist_50, 2))}% below 50 DMA"
 
             # ---------------------------------------------------------
-            # SELL SIDE (Approaching Breakdown / Support Breaking from above)
+            # 2. SELL SIDE (Pre-Breakdown: Testing support from above)
             # ---------------------------------------------------------
-            elif -1.0 <= dist_200 <= 2.0 and current_price < dma_200:
-                category = "Breakdown 200 DMA (Sell)"
-                reason = f"Short Radar: Slipping below 200 DMA ({abs(round(dist_200, 2))}% close)"
-            elif -1.0 <= dist_100 <= 2.0 and current_price < dma_100:
-                category = "Breakdown 100 DMA (Sell)"
-                reason = f"Short Radar: Slipping below 100 DMA ({abs(round(dist_100, 2))}% close)"
-            elif -1.0 <= dist_50 <= 2.0 and current_price < dma_50:
-                category = "Breakdown 50 DMA (Sell)"
-                reason = f"Short Radar: Slipping below 50 DMA ({abs(round(dist_50, 2))}% close)"
+            elif 0.0 < dist_200 <= 2.0:
+                category = "Pre-Breakdown 200 DMA (Sell)"
+                reason = f"Short Radar: Just {round(dist_200, 2)}% above 200 DMA support"
+            elif 0.0 < dist_100 <= 2.0:
+                category = "Pre-Breakdown 100 DMA (Sell)"
+                reason = f"Short Radar: Just {round(dist_100, 2)}% above 100 DMA support"
+            elif 0.0 < dist_50 <= 2.0:
+                category = "Pre-Breakdown 50 DMA (Sell)"
+                reason = f"Short Radar: Just {round(dist_50, 2)}% above 50 DMA support"
             else:
                 continue
 
@@ -123,7 +129,7 @@ def run_institutional_scanner():
             "stocks": scanned_stocks,
             "total_count": len(scanned_stocks)
         })
-        print(f"🎉 Success! Uploaded {len(scanned_stocks)} Buy & Sell side radar stocks.")
+        print(f"🎉 Success! Uploaded {len(scanned_stocks)} high-momentum bounce radar stocks.")
     else:
         print("⚠️ No stocks matched criteria today.")
 
