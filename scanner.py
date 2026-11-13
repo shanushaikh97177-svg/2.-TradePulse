@@ -1,125 +1,118 @@
-import os
-import json
-from datetime import datetime
 import yfinance as yf
 import pandas as pd
+from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-print("=== Starting TradePulse Pro Scanner (Institutional Grade) ==kw===")
+# 1. Firebase Initialize (Apni JSON key file ka path yahan dein)
+cred = credentials.Certificate("firebase_credentials.json")
+firebase_admin.initialize_app(cred)
+db = firestore.client()
 
-csv_filename = 'ind_nifty500list.csv'
-if not os.path.exists(csv_filename):
-    raise FileNotFoundError(f"CRITICAL ERROR: Required CSV file '{csv_filename}' not found!")
+# Nifty 500 Stocks ki list (Aap yahan apne saare 498-500 stocks ki list rakh sakte hain)
+nifty_500_symbols = [
+    "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS", 
+    "SBIN.NS", "BHARTIARTL.NS", "LICI.NS", "ITC.NS", "HINDUNILVR.NS",
+    "AEGISVOPAK.NS", "AMBER.NS", "ANGELONE.NS", "ACE.NS", "AIAENG.NS",
+    # ... (Aapki baaki bachi hui Nifty 500 stocks ki list)
+]
 
-try:
-    df_symbols = pd.read_csv(csv_filename)
-    if 'Symbol' not in df_symbols.columns or 'Industry' not in df_symbols.columns:
-        raise ValueError("CRITICAL ERROR: 'Symbol' or 'Industry' column missing in CSV!")
-    
-    symbol_to_industry = {}
-    for _, row in df_symbols.iterrows():
-        sym = str(row['Symbol']).strip()
-        ind = str(row['Industry']).strip()
-        symbol_to_industry[sym] = ind if ind and ind != 'nan' else 'Others'
-        
-    symbols = [str(sym).strip() + ".NS" for sym in df_symbols['Symbol'].dropna().tolist()]
-    print("TOTAL SYMBOLS:", len(symbols))
-except Exception as e:
-    raise RuntimeError(f"Failed to parse CSV file: {e}")
+def run_institutional_scanner():
+    scanned_stocks = []
+    today_date = datetime.now().strftime('%Y-%m-%d')
+    print(f"🚀 Scanning {len(nifty_500_symbols)} stocks for Fresh Institutional Crossovers...")
 
-scanned_stocks = []
-failed_count = 0
-chunk_size = 50
+    for symbol in nifty_500_symbols:
+        try:
+            # Historical data fetch karein (200 Days taaki Moving Average nikal sakein)
+            stock = yf.Ticker(symbol)
+            df = stock.history(period="1yr")
+            
+            if df.empty or len(df) < 200:
+                continue
 
-for i in range(0, len(symbols), chunk_size):
-    chunk = symbols[i:i + chunk_size]
-    print(f"Processing chunk {i//chunk_size + 1}...")
-    
-    try:
-        batch_data = yf.download(chunk, period="2mo", group_by='ticker', threads=True, progress=False)
-        
-        for ticker in chunk:
-            try:
-                raw_sym = ticker.replace('.NS', '')
-                industry = symbol_to_industry.get(raw_sym, 'Others')
+            # Latest day ka data
+            current_price = df['Close'].iloc[-1]
+            prev_price = df['Close'].iloc[-2]
+            
+            # ---------------------------------------------------------
+            # FILTER 1: Price ₹100 se kam nahi honi chahiye
+            # ---------------------------------------------------------
+            if current_price < 100.0:
+                continue
+
+            current_volume = df['Volume'].iloc[-1]
+            avg_volume_20 = df['Volume'].rolling(window=20).mean().iloc[-1]
+            volume_ratio = round(current_volume / avg_volume_20, 2) if avg_volume_20 > 0 else 1.0
+            
+            change_val = round(((current_price - prev_price) / prev_price) * 100, 2)
+
+            # Moving Averages calculate karein
+            df['DMA50'] = df['Close'].rolling(window=50).mean()
+            df['DMA100'] = df['Close'].rolling(window=100).mean()
+            df['DMA200'] = df['Close'].rolling(window=200).mean()
+
+            dma_50 = df['DMA50'].iloc[-1]
+            prev_dma_50 = df['DMA50'].iloc[-2]
+            
+            dma_200 = df['DMA200'].iloc[-1]
+            prev_dma_200 = df['DMA200'].iloc[-2]
+
+            # ---------------------------------------------------------
+            # FILTER 2: Strictly TODAY'S Crossover Check (Not past days)
+            # ---------------------------------------------------------
+            crossed_50dma_today = (prev_price <= prev_dma_50) and (current_price > dma_50)
+            crossed_200dma_today = (prev_price <= prev_dma_200) and (current_price > dma_200)
+
+            # Agar aaj inmein se koi crossover hua hai ya heavy volume breakout hai tabhi select karein
+            if crossed_50dma_today or crossed_200dma_today or (volume_ratio >= 2.0 and change_val > 1.0):
                 
-                if len(chunk) == 1:
-                    df = batch_data
+                # Category aur Reason assign karna
+                if crossed_200dma_today:
+                    category = "Short-Term"
+                    reason = "200 DMA Fresh Crossover (Long-term Bullish)"
+                    smart_score = 88
+                elif crossed_50dma_today:
+                    category = "Swing"
+                    reason = "50 DMA Momentum Crossover + Vol Spike"
+                    smart_score = 82
                 else:
-                    if ticker not in batch_data.columns.levels[0]:
-                        failed_count += 1
-                        continue
-                    df = batch_data[ticker]
-                
-                if df.empty or len(df.dropna(subset=['Close'])) < 25:
-                    failed_count += 1
-                    continue
-                
-                df = df.dropna(subset=['Close', 'Volume'])
-                
-                current_price = float(df['Close'].iloc[-1])
-                prev_close = float(df['Close'].iloc[-2])
-                change_pct = ((current_price - prev_close) / prev_close) * 100 if prev_close > 0 else 0.0
-                
-                # 20-day Volume Average comparison
-                vol_series = df['Volume']
-                avg_vol_20 = float(vol_series.iloc[-21:-1].mean()) if len(vol_series) >= 21 else float(vol_series.mean())
-                current_vol = float(vol_series.iloc[-1])
-                volume_ratio = current_vol / avg_vol_20 if avg_vol_20 > 0 else 1.0
-                
-                # 30-Day Range metrics
-                df_30 = df.iloc[-30:]
-                high_30 = float(df_30['High'].max())
-                low_30 = float(df_30['Low'].min())
-                price_range_pct = ((high_30 - low_30) / low_30) * 100 if low_30 > 0 else 0.0
-                near_high_pct = ((high_30 - current_price) / high_30) * 100
-                
-                # Smart Score Calculation (Multi-factor base)
-                vol_score_component = min(volume_ratio * 15, 40)
-                momentum_component = min(max(change_pct, 0) * 10, 30)
-                proximity_component = max(0, 30 - (near_high_pct * 2))
-                smart_score = int(min(max(vol_score_component + momentum_component + proximity_component, 45), 98))
-                
-                scanned_stocks.append({
-                    'symbol': raw_sym,
-                    'name': raw_sym + ' Ltd',
-                    'price': f"Rs. {current_price:,.2f}",
-                    'change': f"{'+' if change_pct > 0 else ''}{change_pct:.2f}%",
-                    'change_val': change_pct,
-                    'category': industry,
-                    'volume_ratio': round(volume_ratio, 1),
-                    'volume_spike': f"{volume_ratio:.1f}x Avg",
-                    'consolidation_range': f"{price_range_pct:.1f}% Range",
-                    'range_val': price_range_pct,
-                    'near_high_val': near_high_pct,
-                    'smart_score': smart_score,
-                    'why_selected': f"Vol: {volume_ratio:.1f}x | Chg: {change_pct:+.1f}%",
-                    'date': datetime.now().strftime('%Y-%m-%d')
-                })
-            except Exception:
-                failed_count += 1
-    except Exception:
-        failed_count += len(chunk)
+                    category = "Intraday"
+                    reason = f"Unusual Volume Spike ({volume_ratio}x vs Avg)"
+                    smart_score = 75
 
-print("SUCCESSFULLY DOWNLOADED:", len(scanned_stocks))
+                stock_info = stock.info
+                stock_data = {
+                    "symbol": symbol.replace(".NS", ""),
+                    "name": stock_info.get('longName', symbol),
+                    "price": f"Rs. {current_price:,.2f}",
+                    "change": f"{'+' if change_val >= 0 else ''}{change_val}%",
+                    "change_val": change_val,
+                    "volume_ratio": volume_ratio,
+                    "volume_spike": f"{volume_ratio}x Avg",
+                    "smart_score": smart_score,
+                    "category": category,
+                    "why_selected": reason,
+                    "consolidation_range": "Breakout Zone",
+                    "scan_date": today_date
+                }
+                scanned_stocks.append(stock_data)
+                print(f"✅ Selected: {symbol} | Price: {current_price} | Reason: {reason}")
 
-cred_env = os.environ.get('FIREBASE_CREDENTIALS')
-if cred_env:
-    cred_dict = json.loads(cred_env)
-    if 'private_key' in cred_dict:
-        cred_dict['private_key'] = cred_dict['private_key'].replace('\\n', '\n')
-    cred = credentials.Certificate(cred_dict)
-    if not firebase_admin._apps:
-        firebase_admin.initialize_app(cred)
+        except Exception as e:
+            print(f"Error processing {symbol}: {e}")
+
+    # 3. Firebase par data save karein (Sirf pure aur filtered stocks)
+    if scanned_stocks:
+        db.collection('daily_picks').document('latest_scan').set({
+            "date": today_date,
+            "stocks": scanned_stocks,
+            "total_count": len(scanned_stocks)
+        })
+        print(f"🎉 Success! Uploaded {len(scanned_stocks)} fresh institutional stocks to Firebase.")
+    else:
+        print("⚠️ No stocks matched today's strict criteria.")
+
+if __name__ == "__main__":
+    run_institutional_scanner()
     
-    db = firestore.client()
-    
-    # Batch write to save each stock safely in collection
-    batch = db.batch()
-    for stock in scanned_stocks:
-        doc_ref = db.collection('nifty_stocks').document(stock['symbol'])
-        batch.set(doc_ref, stock)
-    
-    batch.commit()
-    print(f"TOTAL UPLOADED TO FIREBASE COLLECTION: {len(scanned_stocks)}")
