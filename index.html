@@ -1,152 +1,113 @@
-<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TradePulse Pro | Institutional Terminal</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-</head>
-<body class="bg-gray-950 text-gray-100 font-sans antialiased min-h-screen">
+import yfinance as yf
+import pandas as pd
+from datetime import datetime
+import firebase_admin
+from firebase_admin import credentials, firestore
 
-    <header class="border-b border-gray-800 bg-gray-900/50 backdrop-blur sticky top-0 z-50 px-4 py-3 flex justify-between items-center">
-        <div>
-            <h1 class="text-base font-bold tracking-wider text-blue-400">TRADEPULSE <span class="text-xs bg-blue-950 text-blue-300 px-2 py-0.5 rounded border border-blue-800">INSTITUTIONAL TERMINAL</span></h1>
-            <p class="text-xs text-gray-400">Smart Money & Volume Analytics Engine</p>
-        </div>
-        <div id="last-updated" class="text-xs text-gray-400">Syncing...</div>
-    </header>
+# Firebase Initialize
+if not firebase_admin._apps:
+    cred = credentials.Certificate("firebase_credentials.json")
+    firebase_admin.initialize_app(cred)
+db = firestore.client()
 
-    <main class="max-w-7xl mx-auto p-4">
-        <!-- 8 Final Pro Terminal Cards -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <div onclick="filterCategory('institutional')" class="bg-gray-900 border border-gray-800 p-3 rounded-xl cursor-pointer hover:border-blue-500 transition shadow-lg">
-                <p class="text-xs text-green-400 font-bold">🚀 INST. BREAKOUT</p>
-                <p class="text-xs font-semibold text-white mt-1">Price + Heavy Vol</p>
-            </div>
-            <div onclick="filterCategory('unusual_vol')" class="bg-gray-900 border border-gray-800 p-3 rounded-xl cursor-pointer hover:border-blue-500 transition shadow-lg">
-                <p class="text-xs text-blue-400 font-bold">📊 UNUSUAL VOLUME</p>
-                <p class="text-xs font-semibold text-white mt-1">2x - 5x+ vs 20D Avg</p>
-            </div>
-            <div onclick="filterCategory('smart_score')" class="bg-gray-900 border border-gray-800 p-3 rounded-xl cursor-pointer hover:border-blue-500 transition shadow-lg">
-                <p class="text-xs text-purple-400 font-bold">💎 SMART SCORE</p>
-                <p class="text-xs font-semibold text-white mt-1">Multi-Factor Rated</p>
-            </div>
-            <div onclick="filterCategory('range_breachers')" class="bg-gray-900 border border-gray-800 p-3 rounded-xl cursor-pointer hover:border-blue-500 transition shadow-lg">
-                <p class="text-xs text-yellow-400 font-bold">🎯 30D BREACHERS</p>
-                <p class="text-xs font-semibold text-white mt-1">Testing 30D High</p>
-            </div>
-            <div onclick="filterCategory('tight_range')" class="bg-gray-900 border border-gray-800 p-3 rounded-xl cursor-pointer hover:border-blue-500 transition shadow-lg">
-                <p class="text-xs text-teal-400 font-bold">🛡️ TIGHT RANGE</p>
-                <p class="text-xs font-semibold text-white mt-1">Volatility Contraction</p>
-            </div>
-            <div onclick="filterCategory('pullback')" class="bg-gray-900 border border-gray-800 p-3 rounded-xl cursor-pointer hover:border-blue-500 transition shadow-lg">
-                <p class="text-xs text-red-400 font-bold">📉 PULLBACK ACCUM.</p>
-                <p class="text-xs font-semibold text-white mt-1">Dip Buying Zones</p>
-            </div>
-            <div onclick="filterCategory('heavy_delivery')" class="bg-gray-900 border border-gray-800 p-3 rounded-xl cursor-pointer hover:border-blue-500 transition shadow-lg">
-                <p class="text-xs text-orange-400 font-bold">📈 HEAVY DELIVERY</p>
-                <p class="text-xs font-semibold text-white mt-1">Strong Accumulation</p>
-            </div>
-            <div onclick="filterCategory('all')" class="bg-gray-900 border border-gray-800 p-3 rounded-xl cursor-pointer hover:border-blue-500 transition shadow-lg">
-                <p class="text-xs text-gray-400 font-bold">⭐ MASTER TERMINAL</p>
-                <p class="text-xs font-semibold text-white mt-1">All Nifty 500</p>
-            </div>
-        </div>
+# Nifty 500 Stocks List (Aap yahan apne saare stocks ki list rakh sakte hain)
+nifty_500_symbols = [
+    "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS", 
+    "SBIN.NS", "BHARTIARTL.NS", "LICI.NS", "ITC.NS", "HINDUNILVR.NS",
+    "AEGISVOPAK.NS", "AMBER.NS", "ANGELONE.NS", "ACE.NS", "AIAENG.NS",
+    # ... (Aapki baaki bachi hui Nifty 500 stocks ki list)
+]
 
-        <!-- Stocks Container -->
-        <div id="stocks-container" class="space-y-3">
-            <div class="text-center py-10 text-gray-500">Loading terminal analytics...</div>
-        </div>
-    </main>
+def run_institutional_scanner():
+    scanned_stocks = []
+    today_date = datetime.now().strftime('%Y-%m-%d')
+    print(f"🚀 Scanning {len(nifty_500_symbols)} stocks for Institutional Terminal...")
 
-    <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyBr0I4BZvv4651iJ1qYd71ujgzqJHIEscQ",
-            authDomain: "karigarhub-4be11.firebaseapp.com",
-            projectId: "karigarhub-4be11",
-            storageBucket: "karigarhub-4be11.firebasestorage.app",
-            messagingSenderId: "53132885049",
-            appId: "1:53132885049:web:5604f1ae1379334ec2a1e8",
-            measurementId: "G-NHGQ9RM5E3"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
+    for symbol in nifty_500_symbols:
+        try:
+            stock = yf.Ticker(symbol)
+            df = stock.history(period="6mo")
+            
+            if df.empty or len(df) < 50:
+                continue
 
-        let allStocks = [];
+            current_price = float(df['Close'].iloc[-1])
+            prev_price = float(df['Close'].iloc[-2])
+            
+            # ---------------------------------------------------------
+            # FILTER 1: Price ₹100 se kam nahi honi chahiye
+            # ---------------------------------------------------------
+            if current_price < 100.0:
+                continue
 
-        db.collection('daily_picks').doc('latest_scan').get().then((doc) => {
-            if (doc.exists) {
-                const data = doc.data();
-                allStocks = data.stocks || [];
-                document.getElementById('last-updated').innerText = `Synced: Today (${allStocks.length} Stocks)`;
-                renderStocks(allStocks);
-            } else {
-                document.getElementById('stocks-container').innerHTML = '<p class="text-center text-red-500 py-10">No data found in Firebase!</p>';
+            current_volume = float(df['Volume'].iloc[-1])
+            avg_volume_20 = float(df['Volume'].rolling(window=20).mean().iloc[-1])
+            volume_ratio = round(current_volume / avg_volume_20, 2) if avg_volume_20 > 0 else 1.0
+            
+            change_val = round(((current_price - prev_price) / prev_price) * 100, 2)
+
+            # Moving Averages & Range Calculations
+            df['DMA50'] = df['Close'].rolling(window=50).mean()
+            dma_50 = float(df['DMA50'].iloc[-1]) if not pd.isna(df['DMA50'].iloc[-1]) else current_price
+
+            high_30d = float(df['Close'].tail(30).max())
+            low_30d = float(df['Close'].tail(30).min())
+            
+            range_val = round(((high_30d - low_30d) / current_price) * 100, 2)
+            near_high_val = round(((high_30d - current_price) / current_price) * 100, 2)
+
+            # Dynamic Smart Score Generation (0 to 100)
+            score = 50
+            if volume_ratio > 1.5: score += 15
+            if volume_ratio > 3.0: score += 10
+            if change_val > 0: score += 10
+            if current_price > dma_50: score += 15
+            smart_score = min(score, 98)
+
+            # Category & Reason Assignment
+            if volume_ratio >= 2.5:
+                category = "Intraday"
+                reason = f"High Volume Spike ({volume_ratio}x vs Avg)"
+            elif near_high_val <= 2.0:
+                category = "Swing"
+                reason = "Testing 30D High Breakout Zone"
+            else:
+                category = "Short-Term"
+                reason = "Stable Institutional Accumulation"
+
+            stock_info = stock.info
+            stock_data = {
+                "symbol": symbol.replace(".NS", ""),
+                "name": stock_info.get('longName', symbol.replace(".NS", "")),
+                "price": f"Rs. {current_price:,.2f}",
+                "change": f"{'+' if change_val >= 0 else ''}{change_val}%",
+                "change_val": float(change_val),
+                "volume_ratio": float(volume_ratio),
+                "volume_spike": f"{volume_ratio}x Avg",
+                "smart_score": int(smart_score),
+                "category": category,
+                "why_selected": reason,
+                "consolidation_range": f"{range_val}% Range",
+                "range_val": float(range_val),
+                "near_high_val": float(near_high_val),
+                "scan_date": today_date
             }
-        }).catch(err => {
-            console.error(err);
-            document.getElementById('stocks-container').innerHTML = '<p class="text-center text-red-500 py-10">Failed to load terminal data.</p>';
-        });
+            scanned_stocks.append(stock_data)
 
-        function renderStocks(stocks) {
-            const container = document.getElementById('stocks-container');
-            container.innerHTML = '';
+        except Exception as e:
+            print(f"Error processing {symbol}: {e}")
 
-            if (stocks.length === 0) {
-                container.innerHTML = '<p class="text-center text-gray-500 py-10">No stocks found for this metric.</p>';
-                return;
-            }
+    # Firebase par saare filtered stocks save karein
+    if scanned_stocks:
+        db.collection('daily_picks').document('latest_scan').set({
+            "date": today_date,
+            "stocks": scanned_stocks,
+            "total_count": len(scanned_stocks)
+        })
+        print(f"🎉 Success! Uploaded {len(scanned_stocks)} filtered institutional stocks to Firebase.")
+    else:
+        print("⚠️ No stocks matched criteria.")
 
-            stocks.forEach(stock => {
-                const isPositive = stock.change_val >= 0;
-                const card = `
-                    <div class="bg-gray-900 border border-gray-800 hover:border-gray-700 p-4 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-3 transition">
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <h3 class="font-bold text-sm text-white">${stock.symbol}</h3>
-                                <span class="text-xs bg-blue-950 text-blue-400 px-2 py-0.5 rounded border border-blue-900">${stock.category}</span>
-                                <span class="text-xs bg-purple-950 text-purple-300 px-2 py-0.5 rounded border border-purple-900">Score: ${stock.smart_score}</span>
-                            </div>
-                            <p class="text-xs text-gray-400 mt-1">${stock.name}</p>
-                            <div class="flex flex-wrap gap-2 mt-2 text-xs text-gray-300">
-                                <span class="bg-gray-800 px-2 py-0.5 rounded">📦 ${stock.consolidation_range}</span>
-                                <span class="bg-gray-800 px-2 py-0.5 rounded">⚡ ${stock.volume_spike}</span>
-                                <span class="text-gray-400">💡 ${stock.why_selected}</span>
-                            </div>
-                        </div>
-                        <div class="text-left md:text-right w-full md:w-auto flex md:flex-col justify-between items-center md:items-end border-t md:border-t-0 pt-2 md:pt-0 border-gray-800">
-                            <span class="font-mono text-sm font-bold text-white">${stock.price}</span>
-                            <span class="font-mono text-xs font-semibold ${isPositive ? 'text-green-400' : 'text-red-400'}">${stock.change}</span>
-                        </div>
-                    </div>
-                `;
-                container.innerHTML += card;
-            });
-        }
-
-        function filterCategory(type) {
-            let filtered = [];
-            if (type === 'institutional') {
-                filtered = allStocks.filter(s => s.change_val >= 1.0 && s.volume_ratio >= 1.8);
-            } else if (type === 'unusual_vol') {
-                filtered = allStocks.filter(s => s.volume_ratio >= 2.0);
-            } else if (type === 'smart_score') {
-                filtered = allStocks.filter(s => s.smart_score >= 75);
-            } else if (type === 'range_breachers') {
-                filtered = allStocks.filter(s => s.near_high_val <= 3.0);
-            } else if (type === 'tight_range') {
-                filtered = allStocks.filter(s => s.range_val <= 5.0);
-            } else if (type === 'pullback') {
-                filtered = allStocks.filter(s => s.change_val >= -2.0 && s.change_val < 0);
-            } else if (type === 'heavy_delivery') {
-                filtered = allStocks.filter(s => s.volume_ratio >= 1.5);
-            } else {
-                filtered = allStocks;
-            }
-            renderStocks(filtered);
-        }
-    </script>
-</body>
-</html>
+if __name__ == "__main__":
+    run_institutional_scanner()
+                
