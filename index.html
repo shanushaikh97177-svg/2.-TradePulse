@@ -29,7 +29,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             projectId: "karigarhub-4be11",
@@ -41,15 +41,24 @@
         async function loadStocks() {
             const container = document.getElementById('stock-container');
             try {
-                const querySnapshot = await getDocs(collection(db, "daily_picks"));
-                if (querySnapshot.empty) {
+                const docRef = doc(db, "daily_picks", "latest_scan");
+                const docSnap = await getDoc(docRef);
+
+                if (!docSnap.exists()) {
                     container.innerHTML = '<div class="loading">No stocks found in database yet. Run the scanner!</div>';
                     return;
                 }
 
+                const data = docSnap.data();
+                const stocksArray = data.stocks;
+
+                if (!stocksArray || stocksArray.length === 0) {
+                    container.innerHTML = '<div class="loading">Stock list is empty.</div>';
+                    return;
+                }
+
                 let html = '';
-                querySnapshot.forEach((doc) => {
-                    const stock = doc.data();
+                stocksArray.forEach((stock) => {
                     html += `
                         <div class="card">
                             <div class="stock-header">
