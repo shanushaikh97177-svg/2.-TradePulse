@@ -75,15 +75,17 @@
 
         let allStocks = [];
 
-        db.collection('daily_picks').doc('latest_scan').get().then((doc) => {
-            if (doc.exists) {
-                const data = doc.data();
-                allStocks = data.stocks || [];
-                document.getElementById('last-updated').innerText = `Synced: ${data.updated_at ? data.updated_at.split('T')[0] : 'Today'}`;
-                renderStocks(allStocks);
-            } else {
-                document.getElementById('stocks-container').innerHTML = '<p class="text-center text-red-500 py-10">No data found in Firebase!</p>';
-            }
+        db.collection('nifty_stocks').get().then((querySnapshot) => {
+            allStocks = [];
+            querySnapshot.forEach((doc) => {
+                allStocks.push(doc.data());
+            });
+            
+            document.getElementById('last-updated').innerText = `Synced: Today (${allStocks.length} Stocks)`;
+            renderStocks(allStocks);
+        }).catch(err => {
+            console.error(err);
+            document.getElementById('stocks-container').innerHTML = '<p class="text-center text-red-500 py-10">Failed to load terminal data.</p>';
         });
 
         function renderStocks(stocks) {
@@ -125,25 +127,18 @@
         function filterCategory(type) {
             let filtered = [];
             if (type === 'institutional') {
-                // Price surge (>1%) + Volume Spike (>= 1.8x)
                 filtered = allStocks.filter(s => s.change_val >= 1.0 && s.volume_ratio >= 1.8);
             } else if (type === 'unusual_vol') {
-                // 2x, 3x, 5x+ vs 20-day average volume
                 filtered = allStocks.filter(s => s.volume_ratio >= 2.0);
             } else if (type === 'smart_score') {
-                // High Multi-factor Smart Score (>= 75)
                 filtered = allStocks.filter(s => s.smart_score >= 75);
             } else if (type === 'range_breachers') {
-                // Near 30D High (within 3% of high)
                 filtered = allStocks.filter(s => s.near_high_val <= 3.0);
             } else if (type === 'tight_range') {
-                // Volatility Contraction / Tight 30D Range (<= 5%)
                 filtered = allStocks.filter(s => s.range_val <= 5.0);
             } else if (type === 'pullback') {
-                // Dip buying / Mild negative change with solid structure
                 filtered = allStocks.filter(s => s.change_val >= -2.0 && s.change_val < 0);
             } else if (type === 'heavy_delivery') {
-                // High volume stability / solid baseline
                 filtered = allStocks.filter(s => s.volume_ratio >= 1.5);
             } else {
                 filtered = allStocks;
