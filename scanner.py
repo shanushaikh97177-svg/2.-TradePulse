@@ -6,25 +6,22 @@ import pandas as pd
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-print("=== Running TradePulse Batch Nifty 500 Scanner ===")
+print("=== Running TradePulse Local Nifty 500 Batch Scanner ===")
 
-url = "https://raw.githubusercontent.com/avcastro/nifty-stocks/main/nifty500.csv"
-symbols = []
-
+# Local uploaded CSV file se symbols read karenge
 try:
-    df_symbols = pd.read_csv(url)
-    col_name = 'Symbol' if 'Symbol' in df_symbols.columns else df_symbols.columns[0]
-    symbols = [str(sym).strip() + ".NS" for sym in df_symbols[col_name].dropna().tolist()]
-    print(f"Loaded {len(symbols)} symbols from Nifty 500 list.")
+    df_symbols = pd.read_csv('ind_nifty500list.csv')
+    symbols = [str(sym).strip() + ".NS" for sym in df_symbols['Symbol'].dropna().tolist()]
+    print(f"Loaded {len(symbols)} symbols from local Nifty 500 file.")
 except Exception as e:
-    print(f"Error loading list: {e}")
+    print(f"Error loading local CSV: {e}")
     symbols = ["RELIANCE.NS", "TCS.NS", "TATAMOTORS.NS", "INFY.NS", "HDFCBANK.NS"]
 
 scanned_stocks = []
-print("Downloading batch data for all stocks from Yahoo Finance...")
+print("Downloading batch data from Yahoo Finance...")
 
 try:
-    # Poore 500 stocks ko ek sath batch mein download karega (Super fast)
+    # Saare symbols ko ek sath batch mein download karenge
     batch_data = yf.download(symbols, period="1mo", group_by='ticker', threads=True, progress=False)
     
     for ticker in symbols:
