@@ -6,21 +6,30 @@ import pandas as pd
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-print("=== Running TradePulse Advanced Scanner (True Consolidation & Breakout) ===")
+print("=== Running TradePulse Nifty 500 Smart Scanner ===")
 
-symbols = [
-    "RELIANCE.NS", "TCS.NS", "TATAMOTORS.NS", "INFY.NS", "HDFCBANK.NS",
-    "ICICIBANK.NS", "SBIN.NS", "BHARTIARTL.NS", "ITC.NS", "LICI.NS",
-    "HINDUNILVR.NS", "LT.NS", "BAJFINANCE.NS", "MARUTI.NS", "SUNPHARMA.NS",
-    "ADANIENT.NS", "AXISBANK.NS", "TITAN.NS", "ULTRACEMCO.NS", "WIPRO.NS",
-    "NTPC.NS", "POWERGRID.NS", "KOTAKBANK.NS", "ONGC.NS", "TATASTEEL.NS",
-    "M&M.NS", "ADANIPORTS.NS", "COALINDIA.NS", "BAJAJFINSV.NS", "BPCL.NS"
-]
+# Nifty 500 symbols ki live public list fetch karne ke liye URL
+url = "https://raw.githubusercontent.com/avcastro/nifty-stocks/main/nifty500.csv"
+symbols = []
+
+try:
+    df_symbols = pd.read_csv(url)
+    # Check column name (usually 'Symbol' or 'Ticker')
+    col_name = 'Symbol' if 'Symbol' in df_symbols.columns else df_symbols.columns[0]
+    symbols = [str(sym).strip() + ".NS" for sym in df_symbols[col_name].dropna().tolist()]
+    print(f"Successfully loaded {len(symbols)} symbols from Nifty 500 list.")
+except Exception as e:
+    print(f"Error loading Nifty 500 list, using backup major stocks: {e}")
+    # Fallback backup list agar URL fetch na ho
+    symbols = [
+        "RELIANCE.NS", "TCS.NS", "TATAMOTORS.NS", "INFY.NS", "HDFCBANK.NS",
+        "ICICIBANK.NS", "SBIN.NS", "BHARTIARTL.NS", "ITC.NS", "AXISBANK.NS"
+    ]
 
 scanned_stocks = []
+print(f"Scanning stocks with 30-day true consolidation filter...")
 
-print(f"Scanning {len(symbols)} stocks with 30-day consolidation filter...")
-
+# Poore stocks par loop chalega (agar jyada ho toh testing ke liye limit bhi laga sakte hain)
 for ticker in symbols:
     try:
         stock = yf.Ticker(ticker)
@@ -29,7 +38,6 @@ for ticker in symbols:
         if df.empty or len(df) < 30:
             continue
             
-        # Pichle 30 trading days ka data
         df_30 = df.iloc[-30:]
         high_30 = df_30['High'].max()
         low_30 = df_30['Low'].min()
@@ -43,9 +51,9 @@ for ticker in symbols:
         current_volume = df['Volume'].iloc[-1]
         volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
         
-        # Condition: Tight consolidation (< 15% range) + Volume or Momentum breakout
-        if price_range_pct <= 15.0 and (volume_ratio > 1.1 or change_pct > 0):
-            smart_score = int(min(98, 75 + ((15 - price_range_pct) * 1.2) + (volume_ratio * 3)))
+        # True Consolidation condition (< 18% range over 30 days)
+        if price_range_pct <= 18.0 and (volume_ratio > 1.0 or change_pct > 0):
+            smart_score = int(min(98, 75 + ((18 - price_range_pct) * 1.0) + (volume_ratio * 2)))
             
             scanned_stocks.append({
                 'symbol': ticker.replace('.NS', ''),
@@ -63,10 +71,11 @@ for ticker in symbols:
                 'date': datetime.now().strftime('%Y-%m-%d')
             })
     except Exception as e:
-        print(f"Error processing {ticker}: {e}")
+        # Skip individual ticker errors quietly to keep scan running
+        continue
 
-# Agar strict condition par kam aayein, toh top performers utha lo
-scanned_stocks = sorted(scanned_stocks, key=lambda x: x['smart_score'], reverse=True)[:10]
+# Top 15 best stocks ko sort karke uthao
+scanned_stocks = sorted(scanned_stocks, key=lambda x: x['smart_score'], reverse=True)[:15]
 
 if not scanned_stocks:
     print("Using fallback data...")
@@ -78,7 +87,7 @@ if not scanned_stocks:
         'smart_score': 94, 'high_30': '₹2,900.00', 'low_30': '₹2,750.00', 'date': datetime.now().strftime('%Y-%m-%d')
     }]
 
-# Firebase connection & upload
+# Firebase Connection & Upload
 db = None
 try:
     cred_env = os.environ.get('FIREBASE_CREDENTIALS')
@@ -97,6 +106,7 @@ try:
             'updated_at': datetime.now().isoformat(),
             'stocks': scanned_stocks
         })
-        print(f"Successfully uploaded {len(scanned_stocks)} advanced stocks to Firestore!")
+        print(f"Successfully uploaded {len(scanned_stocks)} Nifty 500 scanned stocks to Firestore!")
 except Exception as e:
     print(f"Firebase error: {e}")
+    
