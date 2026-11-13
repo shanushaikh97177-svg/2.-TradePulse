@@ -6,20 +6,25 @@ import pandas as pd
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-print("=== Running TradePulse Unfiltered Stock Loader ===")
+print("=== Running TradePulse Full Nifty 500 Scanner ===")
 
-symbols = [
-    "RELIANCE.NS", "TCS.NS", "TATAMOTORS.NS", "INFY.NS", "HDFCBANK.NS",
-    "ICICIBANK.NS", "SBIN.NS", "BHARTIARTL.NS", "ITC.NS", "AXISBANK.NS",
-    "KOTAKBANK.NS", "LT.NS", "SUNPHARMA.NS", "TITAN.NS", "BAJFINANCE.NS",
-    "MARUTI.NS", "ULTRACEMCO.NS", "WIPRO.NS", "NTPC.NS", "POWERGRID.NS",
-    "ONGC.NS", "TATASTEEL.NS", "M&M.NS", "ADANIPORTS.NS", "COALINDIA.NS",
-    "BAJAJFINSV.NS", "BPCL.NS", "HINDUNILVR.NS", "LICI.NS", "ADANIENT.NS"
-]
+# Poori Nifty 500 public list URL
+url = "https://raw.githubusercontent.com/avcastro/nifty-stocks/main/nifty500.csv"
+symbols = []
+
+try:
+    df_symbols = pd.read_csv(url)
+    col_name = 'Symbol' if 'Symbol' in df_symbols.columns else df_symbols.columns[0]
+    symbols = [str(sym).strip() + ".NS" for sym in df_symbols[col_name].dropna().tolist()]
+    print(f"Loaded all {len(symbols)} symbols from Nifty 500 list.")
+except Exception as e:
+    print(f"Error loading list: {e}")
+    symbols = ["RELIANCE.NS", "TCS.NS", "TATAMOTORS.NS", "INFY.NS", "HDFCBANK.NS"]
 
 scanned_stocks = []
-print("Fetching market data...")
+print("Scanning full market data (this may take a few minutes)...")
 
+# Koi slicing nahi - poore list par loop chalega
 for ticker in symbols:
     try:
         stock = yf.Ticker(ticker)
@@ -57,11 +62,11 @@ for ticker in symbols:
             'date': datetime.now().strftime('%Y-%m-%d')
         })
     except Exception as e:
-        print(f"Error {ticker}: {e}")
         continue
 
-scanned_stocks = scanned_stocks[:15]
+print(f"Total scanned valid stocks: {len(scanned_stocks)}")
 
+# Firebase Connection & Upload
 db = None
 try:
     cred_env = os.environ.get('FIREBASE_CREDENTIALS')
@@ -80,7 +85,7 @@ try:
             'updated_at': datetime.now().isoformat(),
             'stocks': scanned_stocks
         })
-        print(f"Successfully uploaded {len(scanned_stocks)} stocks to Firestore!")
+        print(f"Successfully uploaded all {len(scanned_stocks)} stocks to Firestore!")
 except Exception as e:
     print(f"Firebase error: {e}")
     
