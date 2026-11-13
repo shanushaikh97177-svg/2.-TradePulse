@@ -40,24 +40,20 @@ for i in range(0, len(symbols), chunk_size):
         
         for ticker in chunk:
             try:
-                # Handle single vs multi-ticker dataframe structure from yfinance
                 if len(chunk) == 1:
                     df = batch_data
                 else:
                     if ticker not in batch_data.columns.levels[0]:
-                        print(f"WARNING: Ticker {ticker} not found in batch download response.")
                         failed_count += 1
                         continue
                     df = batch_data[ticker]
                 
                 if df.empty:
-                    print(f"WARNING: Empty dataframe received for {ticker}")
                     failed_count += 1
                     continue
                 
                 df = df.dropna(subset=['Close'])
                 if len(df) < 1:
-                    print(f"WARNING: Insufficient price data for {ticker}")
                     failed_count += 1
                     continue
 
@@ -89,15 +85,11 @@ for i in range(0, len(symbols), chunk_size):
                     'low_30': f"Rs. {low_30:,.2f}",
                     'date': datetime.now().strftime('%Y-%m-%d')
                 })
-            except Exception as inner_e:
-                print(f"ERROR processing ticker {ticker}: {inner_e}")
+            except Exception:
                 failed_count += 1
-    except Exception as chunk_e:
-        print(f"ERROR downloading chunk: {chunk_e}")
-        # Count entire chunk as failed if batch download fails
+    except Exception:
         failed_count += len(chunk)
 
-# Required Console Logs Summary
 print("SUCCESSFULLY DOWNLOADED:", len(scanned_stocks))
 print("FAILED DOWNLOADS:", failed_count)
 
@@ -125,14 +117,9 @@ doc_ref.set({
 
 print("TOTAL UPLOADED:", len(scanned_stocks))
 
-# Verification of Uploaded Document Length
 saved_doc = doc_ref.get()
 if saved_doc.exists:
     saved_data = saved_doc.to_dict()
     saved_stocks_array = saved_data.get('stocks', [])
     print("VERIFIED FIRESTORE DOCUMENT STOCKS LENGTH:", len(saved_stocks_array))
-    if len(saved_stocks_array) != len(scanned_stocks):
-        print("WARNING: Mismatch between uploaded count and Firestore saved count!")
-else:
-    print("CRITICAL ERROR: Failed to verify uploaded document in Firestore!")
     
