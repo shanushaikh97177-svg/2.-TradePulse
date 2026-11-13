@@ -14,12 +14,13 @@ nifty_500_symbols = [
     "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS", 
     "SBIN.NS", "BHARTIARTL.NS", "LICI.NS", "ITC.NS", "HINDUNILVR.NS",
     "AEGISVOPAK.NS", "AMBER.NS", "ANGELONE.NS", "ACE.NS", "AIAENG.NS",
+    # (Aapki baaki bachi hui Nifty 500 stocks ki list yahan rahegi)
 ]
 
 def run_institutional_scanner():
     scanned_stocks = []
     today_date = datetime.now().strftime('%Y-%m-%d')
-    print("Scanning for Approaching DMA Pre-Breakout Radar...")
+    print("🚀 Scanning for Buy-Side Pre-Breakouts & Sell-Side Breakdowns...")
 
     for symbol in nifty_500_symbols:
         try:
@@ -32,7 +33,7 @@ def run_institutional_scanner():
             current_price = float(df['Close'].iloc[-1])
             prev_price = float(df['Close'].iloc[-2])
             
-            # FILTER: Price < ₹100 rejected
+            # FILTER: Price < ₹100 strictly rejected
             if current_price < 100.0:
                 continue
 
@@ -51,7 +52,7 @@ def run_institutional_scanner():
             dma_100 = float(df['DMA100'].iloc[-1])
             dma_200 = float(df['DMA200'].iloc[-1])
 
-            # Distance percentage check (Approaching DMA Radar)
+            # Distance percentage check
             dist_50 = ((current_price - dma_50) / dma_50) * 100
             dist_100 = ((current_price - dma_100) / dma_100) * 100
             dist_200 = ((current_price - dma_200) / dma_200) * 100
@@ -59,15 +60,31 @@ def run_institutional_scanner():
             category = None
             reason = None
 
-            if -2.0 <= dist_200 <= 1.0:
-                category = "Approaching 200 DMA"
+            # ---------------------------------------------------------
+            # BUY SIDE (Approaching Breakout from below)
+            # ---------------------------------------------------------
+            if -2.0 <= dist_200 <= 1.0 and current_price >= dma_200:
+                category = "Approaching 200 DMA (Buy)"
                 reason = f"Pre-Breakout Radar: Only {abs(round(dist_200, 2))}% away from 200 DMA"
-            elif -2.0 <= dist_100 <= 1.0:
-                category = "Approaching 100 DMA"
+            elif -2.0 <= dist_100 <= 1.0 and current_price >= dma_100:
+                category = "Approaching 100 DMA (Buy)"
                 reason = f"Pre-Breakout Radar: Only {abs(round(dist_100, 2))}% away from 100 DMA"
-            elif -2.0 <= dist_50 <= 1.0:
-                category = "Approaching 50 DMA"
+            elif -2.0 <= dist_50 <= 1.0 and current_price >= dma_50:
+                category = "Approaching 50 DMA (Buy)"
                 reason = f"Pre-Breakout Radar: Only {abs(round(dist_50, 2))}% away from 50 DMA"
+
+            # ---------------------------------------------------------
+            # SELL SIDE (Approaching Breakdown / Support Breaking from above)
+            # ---------------------------------------------------------
+            elif -1.0 <= dist_200 <= 2.0 and current_price < dma_200:
+                category = "Breakdown 200 DMA (Sell)"
+                reason = f"Short Radar: Slipping below 200 DMA ({abs(round(dist_200, 2))}% close)"
+            elif -1.0 <= dist_100 <= 2.0 and current_price < dma_100:
+                category = "Breakdown 100 DMA (Sell)"
+                reason = f"Short Radar: Slipping below 100 DMA ({abs(round(dist_100, 2))}% close)"
+            elif -1.0 <= dist_50 <= 2.0 and current_price < dma_50:
+                category = "Breakdown 50 DMA (Sell)"
+                reason = f"Short Radar: Slipping below 50 DMA ({abs(round(dist_50, 2))}% close)"
             else:
                 continue
 
@@ -106,9 +123,10 @@ def run_institutional_scanner():
             "stocks": scanned_stocks,
             "total_count": len(scanned_stocks)
         })
-        print(f"Success! Uploaded {len(scanned_stocks)} radar stocks.")
+        print(f"🎉 Success! Uploaded {len(scanned_stocks)} Buy & Sell side radar stocks.")
     else:
-        print("No stocks matched criteria today.")
+        print("⚠️ No stocks matched criteria today.")
 
 if __name__ == "__main__":
     run_institutional_scanner()
+    
