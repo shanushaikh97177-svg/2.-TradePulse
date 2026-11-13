@@ -1,3 +1,4 @@
+
 name: Run Daily Stock Scanner
 
 on:
@@ -15,12 +16,14 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Install Dependencies
         run: |
           pip install firebase-admin pandas yfinance
 
       - name: Run python scanner.py
+        env:
+          FIREBASE_CREDENTIALS: ${{ secrets.FIREBASE_CREDENTIALS }}
         run: |
           python scanner.py
