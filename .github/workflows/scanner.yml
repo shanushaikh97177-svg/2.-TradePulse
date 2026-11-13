@@ -1,4 +1,3 @@
-
 name: Run Daily Stock Scanner
 
 on:
@@ -22,8 +21,12 @@ jobs:
         run: |
           pip install firebase-admin pandas yfinance
 
+      # 👉 YE NAYA STEP YAHAN JODNA HAI:
+      - name: Create Firebase Credentials File
+        run: |
+          echo '${{ secrets.FIREBASE_CREDENTIALS }}' > firebase_credentials.json
+
       - name: Run python scanner.py
-        env:
-          FIREBASE_CREDENTIALS: ${{ secrets.FIREBASE_CREDENTIALS }}
         run: |
           python scanner.py
+          
