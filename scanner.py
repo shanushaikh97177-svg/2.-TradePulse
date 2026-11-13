@@ -6,7 +6,7 @@ import pandas as pd
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-print("=== Starting TradePulse Pro Scanner (Institutional Grade) ===")
+print("=== Starting TradePulse Pro Scanner (Institutional Grade) ==kw===")
 
 csv_filename = 'ind_nifty500list.csv'
 if not os.path.exists(csv_filename):
@@ -76,7 +76,6 @@ for i in range(0, len(symbols), chunk_size):
                 near_high_pct = ((high_30 - current_price) / high_30) * 100
                 
                 # Smart Score Calculation (Multi-factor base)
-                # Vol multiplier score + Momentum score + Range proximity
                 vol_score_component = min(volume_ratio * 15, 40)
                 momentum_component = min(max(change_pct, 0) * 10, 30)
                 proximity_component = max(0, 30 - (near_high_pct * 2))
@@ -113,11 +112,14 @@ if cred_env:
     cred = credentials.Certificate(cred_dict)
     if not firebase_admin._apps:
         firebase_admin.initialize_app(cred)
-    db = firestore.client()
-    db.collection('daily_picks').document('latest_scan').set({
-        'status': 'active',
-        'updated_at': datetime.now().isoformat(),
-        'stocks': scanned_stocks
-    })
-    print("TOTAL UPLOADED TO FIREBASE:", len(scanned_stocks))
     
+    db = firestore.client()
+    
+    # Batch write to save each stock safely in collection
+    batch = db.batch()
+    for stock in scanned_stocks:
+        doc_ref = db.collection('nifty_stocks').document(stock['symbol'])
+        batch.set(doc_ref, stock)
+    
+    batch.commit()
+    print(f"TOTAL UPLOADED TO FIREBASE COLLECTION: {len(scanned_stocks)}")
