@@ -108,3 +108,20 @@ if db:
         print(f"Error saving to Firestore: {e}")
 else:
     print(f"Firestore DB not connected. Local simulation output: {scanned_stocks}")
+
+import os
+import json
+from firebase_admin import credentials, initialize_app
+
+# GitHub Secret se JSON uthao
+cred_env = os.environ.get('FIREBASE_CREDENTIALS')
+
+if cred_env:
+    cred_dict = json.loads(cred_env)
+    # Yeh line ensure karegi ki private key ki padding kharab na ho
+    if 'private_key' in cred_dict:
+        cred_dict['private_key'] = cred_dict['private_key'].replace('\\n', '\n')
+    
+    cred = credentials.Certificate(cred_dict)
+    initialize_app(cred)
+    
