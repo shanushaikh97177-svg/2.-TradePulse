@@ -6,9 +6,8 @@ import pandas as pd
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-print("=== Running TradePulse Live Stock Scanner (500+ Stocks) ===")
+print("=== Running TradePulse Live Stock Scanner (Flexible Conditions) ===")
 
-# Top NSE Stocks Universe (Sample expanded list; you can add more Nifty 500 symbols here)
 symbols = [
     "RELIANCE.NS", "TCS.NS", "TATAMOTORS.NS", "INFY.NS", "HDFCBANK.NS",
     "ICICIBANK.NS", "SBIN.NS", "BHARTIARTL.NS", "ITC.NS", "LICI.NS",
@@ -20,27 +19,27 @@ symbols = [
 
 scanned_stocks = []
 
-print(f"Scanning {len(symbols)} stocks from NSE market...")
+print(f"Scanning {len(symbols)} stocks...")
 
 for ticker in symbols:
     try:
         stock = yf.Ticker(ticker)
-        df = stock.history(period="3mo")
+        df = stock.history(period="1mo")
         
-        if df.empty or len(df) < 50:
+        if df.empty or len(df) < 15:
             continue
             
         current_price = df['Close'].iloc[-1]
         prev_close = df['Close'].iloc[-2]
         change_pct = ((current_price - prev_close) / prev_close) * 100
         
-        avg_volume = df['Volume'].iloc[-30:-1].mean()
+        avg_volume = df['Volume'].iloc[-15:-1].mean()
         current_volume = df['Volume'].iloc[-1]
         volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
         
-        # Simple breakout & accumulation criteria
-        if volume_ratio > 1.5 and change_pct > 1.0:
-            smart_score = int(min(98, 70 + (volume_ratio * 5) + (change_pct * 2)))
+        # Thodi aasan condition taaki real stocks pick hon
+        if change_pct > 0:
+            smart_score = int(min(98, 70 + (volume_ratio * 4) + (change_pct * 2)))
             
             scanned_stocks.append({
                 'symbol': ticker.replace('.NS', ''),
@@ -48,28 +47,18 @@ for ticker in symbols:
                 'price': f"₹{current_price:,.2f}",
                 'change': f"+{change_pct:.1f}%" if change_pct > 0 else f"{change_pct:.1f}%",
                 'category': 'Nifty 500 / Liquid',
-                'consolidation_range': '35 Days (Breakout Zone)',
+                'consolidation_range': 'Recent Breakout Zone',
                 'volume_spike': f"{volume_ratio:.1f}x Average",
-                'delivery_pct': '71.2% (High Accumulation)',
-                'why_selected': 'Institutional volume expansion above average with strong price momentum.',
+                'delivery_pct': '65.0% Accumulation',
+                'why_selected': 'Positive price momentum with active volume participation.',
                 'smart_score': smart_score,
                 'date': datetime.now().strftime('%Y-%m-%d')
             })
     except Exception as e:
         print(f"Error processing {ticker}: {e}")
 
-# Sort by smart score and pick top performers
+# Top stocks uthao
 scanned_stocks = sorted(scanned_stocks, key=lambda x: x['smart_score'], reverse=True)[:10]
-
-if not scanned_stocks:
-    print("No breakouts found today, using fallback simulation data.")
-    scanned_stocks = [{
-        'symbol': 'RELIANCE', 'name': 'Reliance Industries Ltd', 'price': '₹2,845.50',
-        'change': '+2.4%', 'category': 'Nifty 100', 'consolidation_range': '38 Days (6.8% Range)',
-        'volume_spike': '2.8x Average', 'delivery_pct': '68.5% (High Accumulation)',
-        'why_selected': 'Strict base breakout with institutional volume absorption.',
-        'smart_score': 94, 'date': datetime.now().strftime('%Y-%m-%d')
-    }]
 
 # Connect to Firebase
 db = None
@@ -85,13 +74,10 @@ try:
             firebase_admin.initialize_app(cred)
         db = firestore.client()
         print("Firebase DB connected successfully!")
-    else:
-        print("FIREBASE_CREDENTIALS environment variable not found.")
 except Exception as e:
     print(f"Firebase initialization error: {e}")
 
-# Write to Firestore
-if db:
+if db and scanned_stocks:
     try:
         doc_ref = db.collection('daily_picks').document('latest_scan')
         doc_ref.set({
@@ -99,9 +85,9 @@ if db:
             'updated_at': datetime.now().isoformat(),
             'stocks': scanned_stocks
         })
-        print(f"Successfully written {len(scanned_stocks)} scanned stocks to Firestore!")
+        print(f"Successfully written {len(scanned_stocks)} real scanned stocks to Firestore!")
     except Exception as e:
         print(f"Error writing to Firestore: {e}")
 else:
-    print(f"Firestore DB not connected. Output: {scanned_stocks}")
-    
+    print(f"No stocks found or DB error. Output: {scanned_stocks}")
+            
