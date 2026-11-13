@@ -14,7 +14,7 @@ nifty_500_symbols = [
     "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS", 
     "SBIN.NS", "BHARTIARTL.NS", "LICI.NS", "ITC.NS", "HINDUNILVR.NS",
     "AEGISVOPAK.NS", "AMBER.NS", "ANGELONE.NS", "ACE.NS", "AIAENG.NS",
-    # (Apni baaki bachi hui Nifty 500 stocks ki list yahan rakhein)
+    # (Aapki baaki bachi hui Nifty 500 stocks ki list yahan rakhein)
 ]
 
 def run_institutional_scanner():
@@ -25,7 +25,7 @@ def run_institutional_scanner():
     for symbol in nifty_500_symbols:
         try:
             stock = yf.Ticker(symbol)
-            df = stock.history(period="1yr") # 200 DMA ke liye 1 saal ka data zaroori hai
+            df = stock.history(period="1y") # 👈 Yahan '1yr' ki jagah '1y' kar diya gaya hai
             
             if df.empty or len(df) < 200:
                 continue
@@ -56,16 +56,14 @@ def run_institutional_scanner():
             prev_dma_100 = float(df['DMA100'].iloc[-2])
             prev_dma_200 = float(df['DMA200'].iloc[-2])
 
-            # FILTER 2: Fresh DMA Crossover Check (Aaj price DMA ke upar gaya ho)
+            # FILTER 2: Fresh DMA Crossover Check
             crossed_50 = (current_price >= dma_50) and (prev_price < prev_dma_50)
             crossed_100 = (current_price >= dma_100) and (prev_price < prev_dma_100)
             crossed_200 = (current_price >= dma_200) and (prev_price < prev_dma_200)
 
-            # Agar kisi bhi DMA ka fresh crossover nahi hai, toh skip kar do
             if not (crossed_50 or crossed_100 or crossed_200):
                 continue
 
-            # Category & Reason determination
             if crossed_200:
                 category = "200 DMA Breakout"
                 reason = "Major Trend Reversal: Crossed 200 DMA Today"
@@ -76,7 +74,6 @@ def run_institutional_scanner():
                 category = "50 DMA Breakout"
                 reason = "Short-Term Momentum: Crossed 50 DMA Today"
 
-            # Smart Score calculation
             score = 60
             if volume_ratio > 1.5: score += 20
             if change_val > 2.0: score += 15
